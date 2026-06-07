@@ -103,9 +103,26 @@ class SupabaseService {
 
   static Future<List<Map<String, dynamic>>> fetchCompanyTechs(String companyId) async {
     try {
-      return await _db.from('profiles').select().eq('company_id', companyId).eq('role', 'technicien');
+      final rows = await _db.rpc('get_company_techs_with_status', params: {'cid': companyId});
+      if (rows == null) return [];
+      return List<Map<String, dynamic>>.from(rows as List);
     } catch (e) {
       debugPrint('[Entreprise] fetchCompanyTechs error: $e');
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchInterventionsByTechIds(
+      List<String> techIds) async {
+    if (techIds.isEmpty) return [];
+    try {
+      return await _db
+          .from('interventions')
+          .select()
+          .inFilter('tech_id', techIds)
+          .order('date', ascending: false);
+    } catch (e) {
+      debugPrint('[Entreprise] fetchInterventionsByTechIds error: $e');
       return [];
     }
   }
@@ -215,7 +232,9 @@ class SupabaseService {
 
   static Future<void> assignTech(String interventionId, String techId) async {
     try {
-      await _db.from('interventions').update({'tech_id': techId, 'statut': 'assigne'}).eq('id', interventionId);
+      await _db.from('interventions')
+          .update({'tech_id': techId, 'statut': 'planifie'})
+          .eq('id', interventionId);
     } catch (e) {
       debugPrint('[Entreprise] assignTech error: $e');
     }

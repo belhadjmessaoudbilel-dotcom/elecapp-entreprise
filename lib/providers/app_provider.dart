@@ -35,8 +35,18 @@ class AppProvider extends ChangeNotifier {
   List<Map<String, dynamic>> get techs         => List.unmodifiable(_techs);
   List<Map<String, dynamic>> get interventions => List.unmodifiable(_interventions);
 
-  int get demandesNonVues => _demandes.where((d) => d['vu'] == false).length;
-  int get techsDisponibles => _techs.where((t) => t['statut'] == 'actif').length;
+  int get demandesNonVues  => _demandes.where((d) => d['vu'] == false).length;
+  int get techsDisponibles => _techs.where((t) =>
+      t['statut'] == 'actif' && (t['missions_actives'] as num? ?? 0) == 0).length;
+
+  List<Map<String, dynamic>> get techsDisponiblesList => _techs.where((t) =>
+      t['statut'] == 'actif' && (t['missions_actives'] as num? ?? 0) == 0).toList();
+
+  List<Map<String, dynamic>> get techsEnMission => _techs.where((t) =>
+      (t['missions_actives'] as num? ?? 0) > 0).toList();
+
+  List<Map<String, dynamic>> get interventionsNonAssignees => _interventions
+      .where((i) => i['tech_id'] == null && i['statut'] != 'termine').toList();
   List<Map<String, dynamic>> get devisAcceptes =>
       _devis.where((d) => d['statut'] == 'accepte').toList();
 
@@ -78,16 +88,17 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> _loadData() async {
     if (_companyId == null) return;
-    final results = await Future.wait([
+    final baseResults = await Future.wait([
       SupabaseService.fetchDemandes(_companyId!),
       SupabaseService.fetchDevis(_companyId!),
       SupabaseService.fetchCompanyTechs(_companyId!),
-      SupabaseService.fetchCompanyInterventions(_companyId!),
     ]);
-    _demandes      = results[0];
-    _devis         = results[1];
-    _techs         = results[2];
-    _interventions = results[3];
+    _demandes = baseResults[0];
+    _devis    = baseResults[1];
+    _techs    = baseResults[2];
+    // Charge les interventions en utilisant les IDs des techs déjà chargés
+    final techIds = _techs.map((t) => t['id'] as String? ?? '').where((id) => id.isNotEmpty).toList();
+    _interventions = await SupabaseService.fetchInterventionsByTechIds(techIds);
     notifyListeners();
     _subscribeToDemandes();
     _subscribeToDevis();
@@ -222,7 +233,20 @@ class AppProvider extends ChangeNotifier {
   Future<void> reloadTechs() async {
     if (_companyId == null) return;
     _techs = await SupabaseService.fetchCompanyTechs(_companyId!);
+    final techIds = _techs.map((t) => t['id'] as String? ?? '').where((id) => id.isNotEmpty).toList();
+    _interventions = await SupabaseService.fetchInterventionsByTechIds(techIds);
     notifyListeners();
+  }
+
+  Future<bool> assignerTech(String interventionId, String techId) async {
+    try {
+      await SupabaseService.assignTech(interventionId, techId);
+      await reloadTechs();
+      return true;
+    } catch (e) {
+      debugPrint('[Entreprise] assignerTech error: $e');
+      return false;
+    }
   }
 
   Future<bool> creerMission({
