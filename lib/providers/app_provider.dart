@@ -201,6 +201,16 @@ class AppProvider extends ChangeNotifier {
 
   // ── Techs ─────────────────────────────────────────────────────────────────
 
+  Future<String?> generateInviteCode() async {
+    if (_companyId == null) return null;
+    final code = await SupabaseService.generateInviteCode(_companyId!);
+    if (code != null) {
+      _company = {..._company, 'invite_code': code};
+      notifyListeners();
+    }
+    return code;
+  }
+
   Future<void> inviterTechnicien(String email, String name) async {
     if (_companyId == null) return;
     await SupabaseService.inviteTechnician(email, name, _companyId!);

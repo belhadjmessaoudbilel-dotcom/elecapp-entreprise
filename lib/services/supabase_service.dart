@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -71,6 +72,19 @@ class SupabaseService {
       await _db.from('companies').update({...data, 'updated_at': DateTime.now().toIso8601String()}).eq('id', id);
     } catch (e) {
       debugPrint('[Entreprise] updateCompany error: $e');
+    }
+  }
+
+  static Future<String?> generateInviteCode(String companyId) async {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rng   = Random.secure();
+    final code  = List.generate(6, (_) => chars[rng.nextInt(chars.length)]).join();
+    try {
+      await _db.from('companies').update({'invite_code': code}).eq('id', companyId);
+      return code;
+    } catch (e) {
+      debugPrint('[Entreprise] generateInviteCode error: $e');
+      return null;
     }
   }
 
