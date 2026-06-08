@@ -22,6 +22,8 @@ import 'screens/manager/manager_stats_screen.dart';
 import 'screens/manager/manager_profil_screen.dart';
 import 'screens/manager/manager_company_screen.dart';
 import 'screens/manager/manager_direct_chat_screen.dart';
+import 'screens/manager/manager_conversations_screen.dart';
+import 'screens/manager/manager_mission_chat_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -66,7 +68,7 @@ class _ElecEntrepriseAppState extends State<ElecEntrepriseApp> {
         if (!app.isLoggedIn && !authRoutes.contains(loc)) return '/login';
         if (app.isLoggedIn && app.isPending && loc != '/pending') return '/pending';
         if (app.isLoggedIn && app.isActive &&
-            (loc == '/login' || loc == '/register' || loc == '/pending')) return '/manager';
+            (loc == '/login' || loc == '/register' || loc == '/pending')) { return '/manager'; }
         return null;
       },
       routes: [
@@ -97,6 +99,23 @@ class _ElecEntrepriseAppState extends State<ElecEntrepriseApp> {
             final techId   = state.pathParameters['techId']!;
             final techName = state.uri.queryParameters['name'] ?? '';
             return ManagerDirectChatScreen(techId: techId, techName: techName);
+          },
+        ),
+        GoRoute(
+          path: '/manager/conversations',
+          builder: (ctx, st) => const ManagerConversationsScreen(),
+        ),
+        GoRoute(
+          path: '/manager/conversations/:id',
+          builder: (ctx, state) {
+            final id         = state.pathParameters['id']!;
+            final clientName = state.uri.queryParameters['client'] ?? 'Client';
+            final techName   = state.uri.queryParameters['tech']   ?? 'Technicien';
+            return ManagerMissionChatScreen(
+              interventionId: id,
+              clientName:     clientName,
+              techName:       techName,
+            );
           },
         ),
       ],

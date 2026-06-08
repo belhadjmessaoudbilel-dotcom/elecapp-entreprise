@@ -249,4 +249,146 @@ class SupabaseService {
       return null;
     }
   }
+
+  // ── Messagerie directe Manager ↔ Tech (Canal 1) ───────────────────────────
+
+  static String convId(String companyId, String techId) =>
+      '${companyId}_$techId';
+
+  static Future<List<Map<String, dynamic>>> fetchDirectMessages(
+      String conversationId) async {
+    try {
+      return await _db
+          .from('direct_messages')
+          .select()
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: true);
+    } catch (e) {
+      debugPrint('[Entreprise] fetchDirectMessages error: $e');
+      return [];
+    }
+  }
+
+  static Future<void> sendDirectMessage({
+    required String conversationId,
+    required String senderRole,
+    required String senderName,
+    String? content,
+    String? attachmentUrl,
+    String? attachmentType,
+  }) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    try {
+      await _db.from('direct_messages').insert({
+        'conversation_id': conversationId,
+        'sender_id':       userId,
+        'sender_role':     senderRole,
+        'sender_name':     senderName,
+        if (content != null)        'content':         content,
+        if (attachmentUrl != null)  'attachment_url':  attachmentUrl,
+        if (attachmentType != null) 'attachment_type': attachmentType,
+      });
+    } catch (e) {
+      debugPrint('[Entreprise] sendDirectMessage error: $e');
+    }
+  }
+
+  static Future<void> markDirectMessagesRead(String conversationId) async {
+    final userId = currentUserId;
+    if (userId == null) return;
+    try {
+      await _db
+          .from('direct_messages')
+          .update({'is_read': true})
+          .eq('conversation_id', conversationId)
+          .neq('sender_id', userId)
+          .eq('is_read', false);
+    } catch (e) {
+      debugPrint('[Entreprise] markDirectMessagesRead error: $e');
+    }
+  }
+
+  static RealtimeChannel subscribeToDirectMessages(
+      String conversationId, void Function(Map<String, dynamic>) onNew) {
+    return _db
+        .channel('direct:$conversationId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'direct_messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: conversationId,
+          ),
+          callback: (payload) => onNew(payload.newRecord),
+        )
+        .subscribe();
+  }
+
+  // ── Canal 2 : messagerie mission Client ↔ Tech ↔ Manager ────────────────────
+
+  static Future<List<Map<String, dynamic>>> fetchInterventionMessages(
+      String interventionId) async {
+    try {
+      return await _db
+          .from('messages')
+          .select()
+          .eq('conversation_id', interventionId)
+          .order('created_at', ascending: true);
+    } catch (e) {
+      debugPrint('[Entreprise] fetchInterventionMessages error: $e');
+      return [];
+    }
+  }
+
+  static Future<void> sendInterventionMessage({
+    required String interventionId,
+    required String managerName,
+    required String content,
+  }) async {
+    try {
+      await _db.from('messages').insert({
+        'conversation_id': interventionId,
+        'from_role':       'manager',
+        'from_name':       managerName,
+        'text':            content,
+      });
+    } catch (e) {
+      debugPrint('[Entreprise] sendInterventionMessage error: $e');
+    }
+  }
+
+  static RealtimeChannel subscribeToInterventionMessages(
+      String interventionId, void Function(Map<String, dynamic>) onNew) {
+    return _db
+        .channel('manager:canal2:$interventionId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'conversation_id',
+            value: interventionId,
+          ),
+          callback: (payload) => onNew(payload.newRecord),
+        )
+        .subscribe();
+  }
+
+  static Future<String?> uploadMessageAttachment(
+      String path, List<int> bytes, String mime) async {
+    try {
+      await _storage.from('message-attachments').uploadBinary(
+        path, Uint8List.fromList(bytes),
+        fileOptions: FileOptions(contentType: mime, upsert: true),
+      );
+      return _storage.from('message-attachments').getPublicUrl(path);
+    } catch (e) {
+      debugPrint('[Entreprise] uploadMessageAttachment error: $e');
+      return null;
+    }
+  }
 }

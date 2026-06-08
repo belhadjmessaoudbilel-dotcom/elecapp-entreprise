@@ -20,6 +20,18 @@ class AppProvider extends ChangeNotifier {
   RealtimeChannel? _demandesChannel;
   RealtimeChannel? _devisChannel;
 
+  // Canal 1 : messages directs par conversation
+  final Map<String, List<Map<String, dynamic>>> _directMessages = {};
+  final Map<String, RealtimeChannel>            _directChannels = {};
+  final Map<String, int>                        _unreadDirect   = {};
+
+  Map<String, List<Map<String, dynamic>>> get directMessages =>
+      Map.unmodifiable(_directMessages);
+  int unreadCount(String convId) => _unreadDirect[convId] ?? 0;
+  int get totalUnreadDirect =>
+      _unreadDirect.values.fold(0, (sum, n) => sum + n);
+  String get userId => _userId ?? '';
+
   // Getters
   bool    get isLoggedIn  => _userId != null;
   bool    get isPending   => _userStatut == 'en_attente';
@@ -49,6 +61,13 @@ class AppProvider extends ChangeNotifier {
       .where((i) => i['tech_id'] == null && i['statut'] != 'termine').toList();
   List<Map<String, dynamic>> get devisAcceptes =>
       _devis.where((d) => d['statut'] == 'accepte').toList();
+
+  // Canal 2 : interventions avec tech assigné (hors annulées)
+  List<Map<String, dynamic>> get canal2Conversations => _interventions
+      .where((i) =>
+          (i['tech_id'] as String? ?? '').isNotEmpty &&
+          i['statut'] != 'annule')
+      .toList();
 
   AppProvider() { _init(); }
 
@@ -124,9 +143,75 @@ class AppProvider extends ChangeNotifier {
     });
   }
 
+  // ── Canal 1 : messagerie directe ─────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> loadDirectMessages(String techId) async {
+    if (_companyId == null) return [];
+    final convId = SupabaseService.convId(_companyId!, techId);
+    final msgs   = await SupabaseService.fetchDirectMessages(convId);
+    _directMessages[convId] = msgs;
+    _unreadDirect[convId]   = 0;
+    notifyListeners();
+    _subscribeToDirectMessages(convId);
+    return msgs;
+  }
+
+  void _subscribeToDirectMessages(String convId) {
+    _directChannels[convId]?.unsubscribe();
+    _directChannels[convId] = SupabaseService.subscribeToDirectMessages(
+      convId,
+      (row) {
+        final list = List<Map<String, dynamic>>.from(
+            _directMessages[convId] ?? []);
+        list.add(row);
+        _directMessages[convId] = list;
+        // Incrémenter non-lu si message de l'autre
+        if (row['sender_id'] != _userId) {
+          _unreadDirect[convId] = (_unreadDirect[convId] ?? 0) + 1;
+        }
+        notifyListeners();
+      },
+    );
+  }
+
+  Future<void> sendDirectMessage(String techId, String content) async {
+    if (_companyId == null || _userId == null) return;
+    final convId = SupabaseService.convId(_companyId!, techId);
+    await SupabaseService.sendDirectMessage(
+      conversationId: convId,
+      senderRole:     'manager',
+      senderName:     _userName ?? 'Manager',
+      content:        content,
+    );
+  }
+
+  Future<void> sendDirectAttachment(String techId, String url, String type) async {
+    if (_companyId == null || _userId == null) return;
+    final convId = SupabaseService.convId(_companyId!, techId);
+    await SupabaseService.sendDirectMessage(
+      conversationId: convId,
+      senderRole:     'manager',
+      senderName:     _userName ?? 'Manager',
+      attachmentUrl:  url,
+      attachmentType: type,
+    );
+  }
+
+  Future<void> markDirectRead(String techId) async {
+    if (_companyId == null) return;
+    final convId = SupabaseService.convId(_companyId!, techId);
+    _unreadDirect[convId] = 0;
+    notifyListeners();
+    await SupabaseService.markDirectMessagesRead(convId);
+  }
+
   void _clear() {
     _demandesChannel?.unsubscribe();
     _devisChannel?.unsubscribe();
+    for (final ch in _directChannels.values) { ch.unsubscribe(); }
+    _directChannels.clear();
+    _directMessages.clear();
+    _unreadDirect.clear();
     _userId = _userName = _userEmail = _userStatut = _userRole = _companyId = null;
     _company = {};
     _demandes = _devis = _techs = _interventions = [];
