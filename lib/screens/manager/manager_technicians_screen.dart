@@ -261,24 +261,52 @@ class _TechCard extends StatelessWidget {
           ),
         ],
 
-        // Bouton Assigner (seulement pour techs disponibles)
-        if (isDisponible && onAssign != null) ...[
-          const SizedBox(height: 12),
-          SizedBox(width: double.infinity, height: 40,
-            child: ElevatedButton.icon(
-              onPressed: onAssign,
-              icon: const Icon(Icons.assignment_ind_outlined, size: 16),
-              label: const Text('Assigner à une intervention',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: EM.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        // Actions : Assigner + Message
+        const SizedBox(height: 12),
+        Row(children: [
+          // Bouton Message (toujours visible)
+          Expanded(
+            child: SizedBox(height: 38,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  final techId = tech['id'] as String? ?? '';
+                  context.go('/manager/chat/$techId?name=${Uri.encodeComponent(name)}');
+                },
+                icon: const Icon(Icons.chat_bubble_outline, size: 15),
+                label: const Text('Message',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: EM.accent,
+                  side: BorderSide(color: EM.accent.withValues(alpha: 0.5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: EdgeInsets.zero,
+                ),
               ),
             ),
           ),
-        ],
+          // Bouton Assigner (seulement pour techs disponibles)
+          if (isDisponible && onAssign != null) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: SizedBox(height: 38,
+                child: ElevatedButton.icon(
+                  onPressed: onAssign,
+                  icon: const Icon(Icons.assignment_ind_outlined, size: 15),
+                  label: const Text('Assigner',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: EM.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    padding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ]),
       ]),
     );
   }
